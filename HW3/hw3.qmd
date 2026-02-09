@@ -1,0 +1,314 @@
+---
+title: "ARMA Analysis of Ann Arbor January Low Temperatures"
+author: "Huy Le"
+date: "February 2026"
+date-format: "MMMM YYYY"
+bibliography: references.bib
+output: pdf_document
+format:
+  pdf:
+    cite-method: natbib
+    biblio-style: unsrtnat
+    include-in-header:
+      text: |
+        \RedeclareSectionCommand[
+          beforeskip=0.5em,
+          runin=false,
+          afterskip=0em
+        ]{section}
+        \RedeclareSectionCommand[
+          beforeskip=0em,
+          runin=false,
+          afterskip=0em
+        ]{subsection}
+        \RedeclareSectionCommand[
+          beforeskip=0em,
+          runin=false,
+          afterskip=0em
+        ]{subsubsection}
+        \usepackage{fullpage}
+        \usepackage{float}
+        \setcitestyle{numbers}
+number-sections: true
+jupyter: python3
+---
+
+## Abstract {.unnumbered}
+
+We analyze the Ann Arbor, Michigan January lowest temperature time series spanning 1900--2025 (126 observations, one missing in 1955). 
+We perform analysis including sample autocorrelation and partial autocorrelation functions, 
+fit a range of ARMA(p,q) models for $p = 0,\dots,4$ and $q = 0,\dots,5$, and select the best model via the Akaike Information Criterion (AIC). 
+We also investigate linear trend and compare with global temperature anomalies. The AIC analysis suggests that the series is well-described by a low-order ARMA model, 
+and we perform residual diagnostics to validate our chosen specification.
+
+# Introduction
+
+The Ann Arbor, Michigan January lowest temperature series records the coldest temperature (in degrees Fahrenheit) observed during each January from 1900 to 2025 [@notes531]. 
+Understanding the temporal structure of local climate extremes is important both for climate science and for practical planning. 
+A natural question is whether these annual minimum temperatures follows any systematic trend, or whether they behave essentially as independent random fluctuations.
+
+We apply autoregressive moving average (ARMA) models [@shumway17] to investigate temporal dependence, and performed Akaike Information Criterion (AIC). 
+We also explore whether a linear trend is present and compare the local Ann Arbor record with global temperature to place the results in a broader climate context.
+
+The data consist of 126 annual observations with one missing value in 1955, which we handle via linear interpolation.
+
+```{python}
+#| echo: false
+#| label: setup
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.stattools import adfuller, acf, pacf
+from statsmodels.stats.diagnostic import acorr_ljungbox
+import scipy.stats as stats
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+```{python}
+#| echo: false
+#| label: load-data
+y = pd.read_csv("ann_arbor_weather.csv", sep='\t', comment='#')
+low = y['Low'].copy()
+year = y['Year'].copy()
+# interpolation
+low = low.interpolate(method='linear')
+low = low.astype(float)
+N = len(low)
+```
+
+# Data Analysis
+
+@fig-timeseries shows the January lowest temperature in Ann Arbor from 1900 to 2025. The series fluctuates substantially from year to year, 
+ranging from about $-22^\circ$F (1994) to $+19^\circ$F (1990). 
+
+```{python}
+#| echo: false
+#| label: fig-timeseries
+#| fig-cap: "Ann Arbor January lowest temperature (°F), 1900--2025."
+#| fig-pos: "H"
+plt.figure(figsize=(8, 2.5))
+plt.plot(year, low, linewidth=0.8)
+plt.xlabel('Year')
+plt.ylabel('Temperature (°F)')
+plt.tight_layout()
+plt.show()
+```
+
+The sample mean is `{python} f"{low.mean():.1f}"` °F with a standard deviation of `{python} f"{low.std():.1f}"` °F. @fig-acf displays the sample autocorrelation function (ACF). 
+Most lags fall within the 95% confidence bands, suggesting that temperature each year is independent. 
+
+```{python}
+#| echo: false
+#| label: fig-acf
+#| fig-cap: "Sample ACF of Ann Arbor January Low temperatures."
+#| fig-pos: "H"
+fig, ax = plt.subplots(figsize=(8, 2.5))
+plot_acf(low, lags=20, ax=ax, title='ACF')
+plt.tight_layout()
+plt.show()
+```
+
+We also apply the ADF test to validate stationarity. 
+
+```{python}
+#| echo: false
+#| label: adf-test
+adf_result = adfuller(low, autolag='AIC')
+adf_stat = adf_result[0]
+adf_pvalue = adf_result[1]
+```
+
+The ADF test statistic is `{python} f"{adf_stat:.2f}"` with a $p$-value of `{python} f"{adf_pvalue:.4f}"`, which provides evidence that the series is stationary. 
+Base on this, the data is well fitted on a ARMA model without further differencing.
+
+# Methods
+
+## ARMA Model Specification
+
+We model the January low temperature series $\{Y_n : n = 1, \dots, N\}$ as an ARMA($p,q$) process. Using the backshift operator $B$, we present the model as
+$$
+\phi(B)(Y_n - \mu) = \theta(B)\,\epsilon_n,
+$${#eq-arma}
+where $\{\epsilon_n\}$ is a white noise process with $\epsilon_n \sim \text{i.i.d. } N(0, \sigma^2)$, $\mu = \text{E}[Y_n]$, and
+$$
+\begin{aligned}
+\phi(x) &= 1 - \phi_1 x - \cdots - \phi_p x^p, \\
+\theta(x) &= 1 + \theta_1 x + \cdots + \theta_q x^q.
+\end{aligned}
+$${#eq-polynomials}
+Here $\phi_1, \dots, \phi_p$ are the autoregressive (AR) coefficients and $\theta_1, \dots, \theta_q$ are the moving average (MA) coefficients.
+
+## Model Selection via AIC
+
+We select the model order using AIC:
+$$
+\text{AIC} = -2 \ell(\hat{\theta}) + 2k,
+$${#eq-aic}
+where $\ell(\hat{\theta})$ is the maximized log-likelihood and $k$ is the number of estimated parameters. 
+We fit ARMA($p, q$) for $p \in \{0, 1, 2, 3, 4\}$ and $q \in \{0, 1, 2, 3, 4, 5\}$ and tabulate the resulting AIC values. 
+Lower AIC shows a better trade-off between model fit and complexity.
+
+## Trend Model
+
+Writing the data as $y_{1:N}$, collected at years $t_{1:N}$, we consider a linear trend model with AR(1) errors:
+$$
+(1 - \phi_1 B)(Y_n - \mu - \beta t_n) = \epsilon_n,
+$${#eq-trend}
+where $\{\epsilon_n\}$ is Gaussian white noise with variance $\sigma^2$. Our null model is
+$$
+H^{(0)}: \beta = 0,
+$${#eq-h0}
+and our alternative hypothesis is
+$$
+H^{(1)}: \beta \neq 0.
+$${#eq-h1}
+
+# Results
+
+## Linear Trend
+
+```{python}
+#| echo: false
+#| label: trend-fit
+from numpy.polynomial import polynomial as P
+
+t = year.values.astype(float)
+slope, intercept, r_value, p_value_trend, std_err = stats.linregress(t, low.values)
+trend_line = intercept + slope * t
+```
+
+A linear regression of temperature on year yields a slope of `{python} f"{slope:.4f}"` °F/year ($p$-value = `{python} f"{p_value_trend:.3f}"`), 
+corresponding to a change of about `{python} f"{slope * 125:.1f}"` °F over the 125-year record. 
+
+## AIC Table for ARMA(p,q) Models
+
+```{python}
+#| echo: false
+#| label: tbl-aic
+#| tbl-cap: "AIC values for ARMA(p,q) models"
+
+max_p = 4
+max_q = 5
+aic_table = pd.DataFrame(np.nan, 
+                         index=[f'AR{p}' for p in range(max_p + 1)],
+                         columns=[f'MA{q}' for q in range(max_q + 1)])
+
+for p in range(max_p + 1):
+    for q in range(max_q + 1):
+        try:
+            model = ARIMA(low.values, order=(p, 0, q))
+            result = model.fit()
+            aic_table.loc[f'AR{p}', f'MA{q}'] = result.aic
+        except:
+            aic_table.loc[f'AR{p}', f'MA{q}'] = np.nan
+
+aic_vals = aic_table.astype(float).round(2)
+header = '|  | ' + ' | '.join(aic_vals.columns) + ' |'
+sep = '|---' + '|---' * len(aic_vals.columns) + '|'
+rows = []
+for idx in aic_vals.index:
+    vals = ' | '.join([str(v) for v in aic_vals.loc[idx]])
+    rows.append(f'| {idx} | {vals} |')
+md_table = '\n'.join([header, sep] + rows)
+from IPython.display import Markdown
+Markdown(md_table)
+```
+
+The minimum AIC is 866.96, corresponding to the ARMA(0,0) model. 
+
+## Diagnostics for the Selected Model
+
+```{python}
+#| echo: false
+#| label: best-model
+# Fit the best model (ARMA(0,0)) for diagnostics
+best_p, best_q = 0, 0
+best_model = ARIMA(low.values, order=(best_p, 0, best_q))
+best_result = best_model.fit()
+```
+
+@fig-diagnostics presents diagnostic plots for the ARMA(0,0) model: residual time series and ACF of residuals.
+
+```{python}
+#| echo: false
+#| label: fig-diagnostics
+#| fig-cap: "Diagnostic plots for the ARMA(0,0) model: (a) residuals over time, (b) ACF of residuals."
+#| fig-pos: "H"
+resid = best_result.resid
+
+fig, axes = plt.subplots(1, 2, figsize=(8, 2.5))
+
+# Residual time plot
+axes[0].plot(year, resid, linewidth=0.7)
+axes[0].axhline(y=0, color='r', linestyle='--', linewidth=0.5)
+axes[0].set_xlabel('Year')
+axes[0].set_ylabel('Residual')
+axes[0].set_title('(a) Residuals')
+
+# ACF of residuals
+plot_acf(resid, lags=20, ax=axes[1], title='(b) ACF of Residuals')
+
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+#| echo: false
+#| label: ljung-box
+lb_test = acorr_ljungbox(resid, lags=[10, 15, 20], return_df=True)
+lb_pvals = lb_test['lb_pvalue'].values
+```
+
+The Ljung--Box test [@ljungbox1978] at lags 10, 15, and 20 yields $p$-values of `{python} f"{lb_pvals[0]:.3f}"`, `{python} f"{lb_pvals[1]:.3f}"`, and `{python} f"{lb_pvals[2]:.3f}"`, 
+respectively. This indicate no significant residual autocorrelation. 
+
+## Comparison with Global Temperature
+
+```{python}
+#| echo: false
+#| label: fig-global
+#| fig-cap: "Ann Arbor January Low temperature (blue) compared with global mean temperature anomaly (red)."
+#| fig-pos: "H"
+
+global_temp = pd.read_csv("Global_Temperature.txt", sep=r'\s+', comment='#')
+    
+# Standardize 
+low_std = (low.values - low.values.mean()) / low.values.std()
+gt_years = global_temp['Year'].values
+gt_anom = global_temp['Annual'].values
+gt_std = (gt_anom - gt_anom.mean()) / gt_anom.std()
+    
+plt.figure(figsize=(8, 2.5))
+plt.plot(year, low_std, linewidth=0.7, label='Ann Arbor Jan Low', alpha=0.8)
+plt.plot(gt_years, gt_std, linewidth=1.0, color='red', label='Global anomaly', alpha=0.8)
+plt.xlabel('Year')
+plt.ylabel('Standardized value')
+plt.legend(fontsize=8)
+plt.tight_layout()
+plt.show()
+
+```
+
+The global mean temperature anomaly shows a clear upward trend, especially after 1970. The Ann Arbor January low temperature, by contrast, 
+is far more variable and does not track the global signal closely. This is consistent with the expectation that local temperature extremes are dominated by weather variability
+rather than the smoother global warming signal.
+
+# Conclusions
+
+Our analysis of the Ann Arbor January lowest temperature series (1900--2025) reveals that the data are consistent with a stationary process. 
+The ADF test confirms stationarity, and the AIC-based model selection identifies ARMA(0, 0) as the best-fitting model. 
+
+We found a slope of approximately `{python} f"{slope:.4f}"` °F/year through linear trend analysis, which is small relative to the year-to-year variability. 
+The residual diagnostics for the selected model show no significant autocorrelation.
+
+Comparing with the global temperature record reveals that the local Ann Arbor January minimum temperature series is far noisier than the global average. 
+While global temperatures show a clear warming trend, particularly since the 1970s, the Ann Arbor series is dominated by large interannual variability, 
+making any local trend difficult to detect with conventional ARMA modeling. This highlights the distinction between global climate signals and local weather extremes.
+
+## Bibliography {.unnumbered}
+
+::: {#refs}
+:::

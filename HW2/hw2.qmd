@@ -1,0 +1,154 @@
+---
+title: "[STATS 531] HW2"
+author: "Huy Le"
+date: "January 2026"
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    include-in-header:
+      text: |
+        \usepackage{amsfonts, amsmath, amssymb}
+---
+
+**Question 2.1**
+
+**A.**
+
+For $h > 0$:
+
+\begin{align*}
+\gamma_h &= \text{Cov}(X_n, X_{n+h}) \\
+&= \text{Cov}(X_n, \phi X_{n+h-1} + \epsilon_{n+h}) \\
+&= \phi \cdot \text{Cov}(X_n, X_{n+h-1}) + \text{Cov}(X_n, \epsilon_{n+h}) \\
+&= \phi \gamma_{h-1} \quad \text{($\epsilon_{n+h}$ independent of $X_n$ for $h > 0$)} 
+\end{align*}
+
+This gives a first-order linear homogeneous recurrence, so the solutions are in the form $\gamma_h = A\lambda^h$,
+
+\begin{align*}
+A\lambda^h &= \phi A\lambda^{h-1} \\
+\implies \lambda &= \phi \quad \text{(dividing by $A\lambda^{h-1}$, assume $A$ and $\lambda$ are not 0)}
+\end{align*}
+
+Thus $\gamma_h = A\phi^h$ for $h > 0$. To find $A$, we first find $\gamma_0$. We have
+
+\begin{align*}
+\gamma_0 &= \text{Var}(X_n) \\
+&= \text{Var}(\phi X_{n-1} + \epsilon_n) \\
+&= \phi^2 \text{Var}(X_{n-1}) + \text{Var}(\epsilon_n) \quad \text{($X_{n-1} \perp \epsilon_n$)} \\
+&= \phi^2 \gamma_0 + \sigma^2 \\ 
+\implies \gamma_0 - \phi^2 \gamma_0 &= \sigma^2 \\ 
+\gamma_0(1 - \phi^2) &= \sigma^2 \\ 
+\gamma_0 &= \frac{\sigma^2}{1 - \phi^2}
+\end{align*}
+
+Evaluate $\gamma_h = A\phi^h$ at $h = 0$, we have
+
+$$
+\gamma_0 = A \implies A = \frac{\sigma^2}{1 - \phi^2}
+$$
+
+Therefore,
+
+$$
+\gamma_h = \frac{\sigma^2}{1 - \phi^2}\phi^h, \quad h \geq 0
+$$
+
+**B.**
+
+\begin{align*}
+g(x) &= \frac{1}{1-\phi x} \\
+&= 1 + \phi x + (\phi x)^2 + (\phi x)^3 + \cdots \quad \text{(geometric series, $|\phi x| < 1$)} \\
+&= 1 + \phi x + \phi^2 x^2 + \phi^3 x^3 + \cdots
+\end{align*}
+
+Thus $g_0 = 1$, $g_1 = \phi$, $g_2 = \phi^2$, $g_3 = \phi^3$, and in general $g_j = \phi^j$ for $j \geq 0$.
+
+MA($\infty$) representation of AR(1):
+
+\begin{align*}
+X_n &= \phi X_{n-1} + \epsilon_n \\
+&= \phi(\phi X_{n-2} + \epsilon_{n-1}) + \epsilon_n \\
+&= \phi^2 X_{n-2} + \phi\epsilon_{n-1} + \epsilon_n \\
+&= \phi^2(\phi X_{n-3} + \epsilon_{n-2}) + \phi\epsilon_{n-1} + \epsilon_n \\
+&= \phi^3 X_{n-3} + \phi^2\epsilon_{n-2} + \phi\epsilon_{n-1} + \epsilon_n \\
+&\vdots \\
+X_n &= \sum_{j=0}^{\infty} \phi^j \epsilon_{n-j}.
+\end{align*}
+
+This is an MA($\infty$) process with coefficients $\psi_j = \phi^j$ for $j \geq 0$.
+
+Hence, the general formula for the autocovariance function is
+
+$$
+\gamma_h = \sigma^2 \sum_{j=0}^{\infty} \psi_j \psi_{j+h} \quad [1]
+$$
+
+Applying this with $\psi_j = \phi^j$, we have
+
+\begin{align*}
+\gamma_h &= \sigma^2 \sum_{j=0}^{\infty} \phi^j \phi^{j+h} \\
+&= \sigma^2 \sum_{j=0}^{\infty} \phi^{2j+h} \\
+&= \sigma^2 \phi^h \sum_{j=0}^{\infty} \phi^{2j} \\
+&= \frac{\sigma^2}{1-\phi^2} \phi^h.
+\end{align*}
+
+which yields the same answer in A.
+
+**C.**
+
+```{python}
+#| echo: false
+#| warning: false
+
+import numpy as np
+import matplotlib.pyplot as plt
+from statsmodels.tsa.arima_process import arma_acf
+
+# AR(1) parameter
+phi = 0.8
+lags = np.arange(0, 50)
+acf_formula = phi ** lags
+ar_params = np.array([1, -phi])  
+ma_params = np.array([1])      
+acf_statsmodels = arma_acf(ar_params, ma_params, lags=50)
+
+print(np.all(np.abs(acf_formula - acf_statsmodels) < 1e6))
+
+plt.figure(figsize=(10, 6))
+plt.plot(lags, acf_formula, 'o-', color='red', label='ρ_h = φ^h')
+plt.plot(lags, acf_statsmodels, 's--', color='blue', label='statsmodels ARMAacf')
+plt.legend()
+plt.xlabel('Lag')
+plt.ylabel('Autocorrelation')
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+```
+
+The result returned by `statsmodels.tsa.arima_process.arma_acf` is similar to the formula given from A and B.
+
+**Question 2.2**
+
+We know the solution of stochastic difference equation of the random walk model is $X_n = \epsilon_1 + \epsilon_2 + \cdots + \epsilon_n = \sum_{i=1}^{n} \epsilon_i$.
+
+Without loss of generality, assume $m \leq n$. Then we have
+
+\begin{align*}
+\gamma_{mn} &= \text{Cov}(X_m, X_n) \\
+&= \text{Cov}\left(\sum_{i=1}^{m} \epsilon_i, \sum_{j=1}^{n} \epsilon_j\right) \\
+&= \sum_{i=1}^{m} \sum_{j=1}^{n} \text{Cov}(\epsilon_i, \epsilon_j) \\
+&= \sum_{i=1}^{m} \text{Cov}(\epsilon_i, \epsilon_i) \quad \text{(only non-zero when $i = j$ and $i \leq m$)} \\
+&= \sum_{i=1}^{m} \sigma^2 \\
+&= m\sigma^2
+\end{align*}
+
+Therefore, the autocovariance function for the random walk is
+
+\begin{align*}
+\gamma_{mn} = \text{Cov}(X_m, X_n) = \min(m, n) \sigma^2
+\end{align*}
+
+# References
+
+1. https://ionides.github.io/531w26/04/notes.pdf (Chapter 4, Page 2)
