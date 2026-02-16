@@ -1,0 +1,342 @@
+---
+title: "STATS 531 Homework 4"
+author: "Huy Le"
+date: "February 2026"
+date-format: "MMMM YYYY"
+bibliography: references.bib
+output: pdf_document
+format:
+  pdf:
+    cite-method: natbib
+    biblio-style: unsrtnat
+    include-in-header:
+      text: |
+        \RedeclareSectionCommand[
+          beforeskip=0.5em,
+          runin=false,
+          afterskip=0em
+        ]{section}
+        \RedeclareSectionCommand[
+          beforeskip=0em,
+          runin=false,
+          afterskip=0em
+        ]{subsection}
+        \RedeclareSectionCommand[
+          beforeskip=0em,
+          runin=false,
+          afterskip=0em
+        ]{subsubsection}
+        \usepackage{fullpage}
+        \usepackage{float}
+        \setcitestyle{numbers}
+number-sections: false
+jupyter: python3
+---
+
+\newcommand\prob{\mathbb{P}}
+\newcommand\E{\mathbb{E}}
+\newcommand\var{\mathrm{Var}}
+\newcommand\cov{\mathrm{Cov}}
+
+```{python}
+#| echo: false
+#| label: setup
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy import signal
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+# Question 4.1
+
+**A.** Consider the stationary AR(2) model
+$$
+X_n = 1.5\, X_{n-1} - 0.8\, X_{n-2} + \epsilon_n,
+$${#eq-ar2}
+where $\{\epsilon_n\}$ is white noise with $\var(\epsilon_n) = \sigma^2$.
+
+We first rewrite this in terms of the backshift operator $B$:
+$$
+\phi(B)\, X_n = \epsilon_n, \quad \phi(B) = 1 - 1.5B + 0.8B^2.
+$$
+Recall that the spectral density of a causal ARMA process is given by [@shumway17; @notes531]
+$$
+f(\omega) = \sigma^2 \left| \frac{\theta(e^{-2\pi i\omega})}{\phi(e^{-2\pi i\omega})} \right|^2,
+$${#eq-arma-spectrum}
+where $\theta(z) = 1$ for a pure AR model. Since we have a pure AR(2), this reduces to
+$$
+f(\omega) = \frac{\sigma^2}{\left|1 - 1.5\, e^{-2\pi i\omega} + 0.8\, e^{-4\pi i\omega}\right|^2}.
+$${#eq-ar2-spectrum}
+
+To evaluate the denominator, we let $z = e^{-2\pi i \omega}$ so that
+$$
+\phi(z) = 1 - 1.5z + 0.8z^2.
+$$
+We then compute $|\phi(z)|^2 = \phi(z)\overline{\phi(z)}$. Since $z\bar{z}=1$, we can expand this as
+$$
+|\phi(e^{-2\pi i\omega})|^2 = 1 + 1.5^2 + 0.8^2 - 2(1.5)\cos(2\pi\omega) + 2(1.5)(0.8)\cos(2\pi\omega) - 2(0.8)\cos(4\pi\omega).
+$$
+After simplifying, we obtain
+$$
+|\phi(e^{-2\pi i\omega})|^2 = 2.89 - 0.6\cos(2\pi\omega) - 1.6\cos(4\pi\omega).
+$$
+
+We verify this analytic expression numerically below and plot both the spectral density and the autocovariance function.
+
+```{python}
+#| echo: false
+#| label: fig-ar2-spectrum
+#| fig-cap: "Spectral density of the AR(2) model $X_n = 1.5X_{n-1} - 0.8X_{n-2} + \\epsilon_n$."
+#| fig-pos: "H"
+omega = np.linspace(0, 0.5, 1000)
+ar_coeffs = [1, -1.5, 0.8]
+
+phi_z = 1 - 1.5 * np.exp(-2j * np.pi * omega) + 0.8 * np.exp(-4j * np.pi * omega)
+f_ar2 = 1.0 / np.abs(phi_z)**2
+
+plt.figure(figsize=(8, 3))
+plt.plot(omega, f_ar2, linewidth=1)
+plt.xlabel('Frequency $\\omega$ (cycles per unit time)')
+plt.ylabel('Spectral density $f(\\omega) / \\sigma^2$')
+plt.tight_layout()
+plt.show()
+```
+
+As we can see in @fig-ar2-spectrum, the spectral density shows a prominent peak near $\omega \approx 0.1$, which indicates a quasi-periodic oscillation. 
+We can understand this by examining the roots of the AR(2) polynomial: $\phi(z) = 1 - 1.5z + 0.8z^2$ has complex roots since the discriminant is $1.5^2 - 4(0.8) = -0.95 < 0$. 
+Specifically, the roots are at $z = \frac{1.5 \pm i\sqrt{0.95}}{1.6}$, which have modulus $|z| = 1/\sqrt{0.8} \approx 1.118 > 1$, confirming stationarity. Moreover, the frequency of the spectral peak corresponds to the argument of these complex roots.
+
+```{python}
+#| echo: false
+#| label: fig-ar2-acf
+#| fig-cap: "Autocovariance function of the AR(2) model (in units of $\\sigma^2$), computed from the AR coefficients."
+#| fig-pos: "H"
+from statsmodels.tsa.arima_process import ArmaProcess
+
+ar_poly = np.array([1, -1.5, 0.8])
+ma_poly = np.array([1.0])
+arma_process = ArmaProcess(ar_poly, ma_poly)
+
+max_lag = 30
+acov = arma_process.acovf(nobs=max_lag + 1)
+
+plt.figure(figsize=(8, 3))
+plt.stem(range(max_lag + 1), acov, linefmt='b-', markerfmt='bo', basefmt='r-')
+plt.xlabel('Lag $h$')
+plt.ylabel('$\\gamma(h) / \\sigma^2$')
+plt.tight_layout()
+plt.show()
+```
+
+In @fig-ar2-acf, we observe that the autocovariance function displays damped oscillations. This is the time-domain signature of the complex AR roots, and the oscillatory decay directly reflects the quasi-periodic behavior we identified in the spectral peak above.
+
+**B.** Consider the MA(2) moving mean
+$$
+X_n = \epsilon_{n-2} + \epsilon_{n-1} + \epsilon_n,
+$${#eq-ma2}
+where $\{\epsilon_n\}$ is white noise with $\var(\epsilon_n) = \sigma^2$.
+
+We write this in operator notation as $X_n = \theta(B)\epsilon_n$ with $\theta(B) = 1 + B + B^2$. Accordingly, the spectral density is
+$$
+f(\omega) = \sigma^2 |\theta(e^{-2\pi i\omega})|^2 = \sigma^2 |1 + e^{-2\pi i\omega} + e^{-4\pi i\omega}|^2.
+$${#eq-ma2-spectrum}
+
+We now expand this analytically. Letting $z = e^{-2\pi i\omega}$, we have
+$$
+|1 + z + z^2|^2 = (1+z+z^2)(1+\bar{z}+\bar{z}^2).
+$$
+We then use the identities $z\bar{z} = 1$ and $z + \bar{z} = 2\cos(2\pi\omega)$ to obtain
+$$
+\begin{aligned}
+|1+z+z^2|^2 &= 3 + 4\cos(2\pi\omega) + 2\cos(4\pi\omega) \\
+             &= 3 + 4\cos(2\pi\omega) + 2(2\cos^2(2\pi\omega)-1) \\
+             &= 1 + 4\cos(2\pi\omega) + 4\cos^2(2\pi\omega) \\
+             &= (1 + 2\cos(2\pi\omega))^2.
+\end{aligned}
+$$
+We therefore arrive at the closed-form expression
+$$
+f(\omega) = \sigma^2 (1 + 2\cos(2\pi\omega))^2.
+$${#eq-ma2-final}
+
+```{python}
+#| echo: false
+#| label: fig-ma2-spectrum
+#| fig-cap: "Spectral density of the MA(2) moving mean $X_n = \\epsilon_{n-2} + \\epsilon_{n-1} + \\epsilon_n$."
+#| fig-pos: "H"
+omega = np.linspace(0, 0.5, 1000)
+
+theta_z = 1 + np.exp(-2j * np.pi * omega) + np.exp(-4j * np.pi * omega)
+f_ma2 = np.abs(theta_z)**2
+
+f_ma2_analytic = (1 + 2 * np.cos(2 * np.pi * omega))**2
+
+plt.figure(figsize=(8, 3))
+plt.plot(omega, f_ma2, linewidth=1)
+plt.xlabel('Frequency $\\omega$ (cycles per unit time)')
+plt.ylabel('Spectral density $f(\\omega) / \\sigma^2$')
+plt.tight_layout()
+plt.show()
+```
+
+As @fig-ma2-spectrum confirms, the numerical and analytic formulas agree exactly. We note that the spectral density equals zero at $\omega = 1/3$ (where $\cos(2\pi/3) = -1/2$, so $1 + 2(-1/2) = 0$). Meanwhile, the maximum occurs at $\omega = 0$ where $f(0) = 9\sigma^2$.
+
+```{python}
+#| echo: false
+#| label: fig-ma2-acf
+#| fig-cap: "Autocovariance function of the MA(2) moving mean (in units of $\\sigma^2$)."
+#| fig-pos: "H"
+gamma = np.zeros(max_lag + 1)
+gamma[0] = 3.0
+gamma[1] = 2.0
+gamma[2] = 1.0
+
+plt.figure(figsize=(8, 3))
+plt.stem(range(max_lag + 1), gamma, linefmt='b-', markerfmt='bo', basefmt='r-')
+plt.xlabel('Lag $h$')
+plt.ylabel('$\\gamma(h) / \\sigma^2$')
+plt.tight_layout()
+plt.show()
+```
+
+We can compute the autocovariance of this MA(2) directly: $\gamma(0) = 3\sigma^2$, $\gamma(1) = 2\sigma^2$, $\gamma(2) = \sigma^2$, and $\gamma(h) = 0$ for $|h| > 2$. This sharp cutoff is expected, since an MA($q$) process always has autocovariance that vanishes beyond lag $q$.
+
+**C.** The AR(2) has a sharp spectral peak and its autocovariance oscillates and decays slowly, while the MA(2) puts most of its power at low frequencies and 
+its autocovariance cuts off after just 2 lags. Basically, the AR model is good at capturing narrow peaks in the spectrum, whereas the MA model is better at representing zeros.
+
+
+# Question 4.2
+
+```{python}
+#| echo: false
+#| label: load-sunspots
+dat = pd.read_csv("sunspots.txt", sep=r'\s+', comment='#')
+dat.columns = ['Year', 'Month', 'Time', 'Number', 'Std', 'Nobs']
+dat = dat[dat['Number'] >= 0].reset_index(drop=True)
+sunspot = dat['Number'].values
+time_frac = dat['Time'].values
+N = len(sunspot)
+```
+
+The sunspot data from the WDC-SILSO [@silso] contains `{python} N` monthly mean sunspot numbers from `{python} f"{time_frac[0]:.1f}"` to `{python} f"{time_frac[-1]:.1f}"`. @fig-sunspot-ts shows the well-known approximately 11-year solar cycle.
+
+```{python}
+#| echo: false
+#| label: fig-sunspot-ts
+#| fig-cap: "Monthly mean sunspot number, 1749--2026."
+#| fig-pos: "H"
+plt.figure(figsize=(8, 3))
+plt.plot(time_frac, sunspot, linewidth=0.4)
+plt.xlabel('Year')
+plt.ylabel('Monthly mean sunspot number')
+plt.tight_layout()
+plt.show()
+```
+
+To estimate the spectral density, I tried three approaches. First, we compute the raw periodogram, defined as $I(\omega_j) = \frac{1}{N}|\sum_{n=1}^N X_n e^{-2\pi i \omega_j n}|^2$. 
+Second, we apply a smoothed periodogram using the Daniell kernel [@shumway17], which averages the raw periodogram over a window of neighboring frequencies to reduce variance at the cost of frequency resolution. 
+We try several different bandwidths to assess sensitivity. Third, we fit an AR model with order selected by AIC and compute the implied parametric spectral density.
+
+```{python}
+#| echo: false
+#| label: fig-periodogram
+#| fig-cap: "Raw periodogram of the sunspot series (log scale)."
+#| fig-pos: "H"
+freqs, psd_raw = signal.periodogram(sunspot, fs=12.0, detrend='linear')
+
+plt.figure(figsize=(8, 3))
+plt.semilogy(freqs[1:], psd_raw[1:], linewidth=0.3, alpha=0.7)
+plt.xlabel('Frequency (cycles/year)')
+plt.ylabel('Spectral density (log scale)')
+plt.axvline(x=1/11, color='red', linestyle='--', linewidth=0.8, alpha=0.6, label='1/11 yr$^{-1}$')
+plt.legend(fontsize=8)
+plt.tight_layout()
+plt.show()
+```
+
+As we can see in @fig-periodogram, the raw periodogram is quite noisy, which is expected since it is an inconsistent estimator. 
+Nevertheless, it clearly reveals a dominant peak near $1/11 \approx 0.091$ cycles/year, corresponding to the well-known ~11-year solar cycle.
+
+```{python}
+#| echo: false
+#| label: fig-smoothed
+#| fig-cap: "Smoothed periodogram estimates using different bandwidths, compared with AR-based spectral estimate."
+#| fig-pos: "H"
+
+fig, axes = plt.subplots(2, 2, figsize=(8, 5))
+
+# Smoothed periodograms with different spans
+spans = [3, 11, 31, 101]
+titles = ['Daniell span=3', 'Daniell span=11', 'Daniell span=31', 'AR spectral estimate']
+
+for i, span in enumerate(spans[:3]):
+    ax = axes[i // 2, i % 2]
+    kernel = np.ones(span) / span
+    psd_smooth = np.convolve(psd_raw, kernel, mode='same')
+    ax.semilogy(freqs[1:], psd_smooth[1:], linewidth=0.6)
+    ax.axvline(x=1/11, color='red', linestyle='--', linewidth=0.8, alpha=0.6)
+    ax.set_title(titles[i], fontsize=9)
+    ax.set_xlabel('Frequency (cycles/year)', fontsize=8)
+    ax.set_ylabel('Spectral density', fontsize=8)
+    ax.tick_params(labelsize=7)
+
+# AR-based spectral estimate
+from statsmodels.tsa.ar_model import AutoReg, ar_select_order
+sel = ar_select_order(sunspot, maxlag=50, ic='aic')
+best_ar_order = sel.ar_lags[-1]
+ar_model = AutoReg(sunspot, lags=best_ar_order).fit()
+ar_coeffs_fit = ar_model.params[1:]
+sigma2_hat = ar_model.sigma2
+
+omega_grid = np.linspace(0, 6.0, 2000)
+phi_z = np.ones(len(omega_grid), dtype=complex)
+for k in range(len(ar_coeffs_fit)):
+    phi_z -= ar_coeffs_fit[k] * np.exp(-2j * np.pi * omega_grid * (k + 1) / 12.0)
+f_ar = sigma2_hat / np.abs(phi_z)**2
+
+ax = axes[1, 1]
+ax.semilogy(omega_grid, f_ar, linewidth=0.8)
+ax.axvline(x=1/11, color='red', linestyle='--', linewidth=0.8, alpha=0.6)
+ax.set_title(f'AR({best_ar_order}) spectral estimate', fontsize=9)
+ax.set_xlabel('Frequency (cycles/year)', fontsize=8)
+ax.set_ylabel('Spectral density', fontsize=8)
+ax.tick_params(labelsize=7)
+
+plt.tight_layout()
+plt.show()
+```
+
+Looking at @fig-smoothed, the smoothed periodogram with a moderate bandwidth (span around 11 to 31) seems to work best. When the span is too small (like 3), the plot is still pretty noisy and hard to read. 
+But when it gets too large, the peaks start getting smeared out and you lose detail. 
+The span=11 and span=31 versions both pick up the main cycle clearly while being smooth enough to interpret.
+
+I also tried a parametric approach by fitting an AR model with order chosen by AIC, which gave AR(`{python} best_ar_order`). This one gives the cleanest looking estimate since it is smooth by construction, 
+but it does assume the data actually follows an AR process, which might not be perfectly true. Still, for data like this with a strong periodic signal, AR models tend to do a good job at picking up sharp spectral peaks [@shumway17].
+
+```{python}
+#| echo: false
+#| label: peak-freq
+peak_idx = np.argmax(psd_raw[1:]) + 1
+peak_freq = freqs[peak_idx]
+peak_period = 1.0 / peak_freq if peak_freq > 0 else np.inf
+```
+
+The biggest peak in the spectrum sits at about `{python} f"{peak_freq:.4f}"` cycles/year, so the period is roughly `{python} f"{peak_period:.1f}"` years. This lines up with the Schwabe cycle, which is the well-known ~11-year sunspot cycle caused by the flipping of the sun's magnetic field [@silso].
+
+There is also some power showing up near $2/11 \approx 0.18$ cycles/year, which is the second harmonic. This makes sense because the sunspot cycle is not a perfect sine wave — sunspot numbers tend to rise quickly and fall off slowly, so you need higher harmonics to capture that asymmetry.
+
+At the low-frequency end (below $1/11$ cycles/year), there is broad power that could be related to longer-term changes in how strong each solar cycle is. Some people call this the Gleissberg cycle, which has a period of around 80--100 years. 
+You can kind of see this in the time series itself: some cycles have much higher peaks than others, and this variation happens over many decades.
+
+So overall, the spectrum is dominated by the ~11-year cycle and its harmonics, which is consistent with what solar physicists have known for a long time. 
+
+## Acknowledgments {.unnumbered}
+
+AI (Claude, Anthropic) was used for indenting contents and calculation for a better format, and help integrate code from the Jupyter notebook into the Quarto (.qmd) report format
+
+## Bibliography {.unnumbered}
+
+::: {#refs}
+:::
