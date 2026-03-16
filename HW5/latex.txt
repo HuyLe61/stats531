@@ -1,0 +1,148 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsthm, amsfonts, amsmath}
+
+\title{[STATS 531] HW5}
+\author{Huy Le}
+\date{March 2026}
+
+\begin{document}
+
+\maketitle
+
+\section*{5.1}
+By the chain rule of probability, the joint density factors as
+\begin{align*}
+    f_{X_{0:N}}(x_{0:N})
+    &= f_{X_0}(x_0) \prod_{n=1}^{N} f_{X_n \mid X_0, \ldots, X_{n-1}}(x_n \mid x_0, \ldots, x_{n-1})
+\end{align*}
+Since $(X_n)$ is a Markov process, the future is conditionally independent of the past given the present:
+\[
+    f_{X_n \mid X_0, \ldots, X_{n-1}}(x_n \mid x_0, \ldots, x_{n-1})
+    = f_{X_n \mid X_{n-1}}(x_n \mid x_{n-1}), \quad n = 1, \ldots, N
+\]
+Therefore, we derive the joint distribution as 
+\[
+    f_{X_{0:N}}(x_{0:N})
+    = f_{X_0}(x_0) \prod_{n=1}^{N} f_{X_n \mid X_{n-1}}(x_n \mid x_{n-1}) \qed
+\]
+
+\section*{5.2}
+Applying the marginalization identity
+$f_{X \mid Y} = \int f_{X, Z \mid Y}\, dz$ with $X = X_n$, $Z = X_{n-1}$, $Y = Y_{1:n-1}$, we have
+\begin{align*}
+    f_{X_n \mid Y_{1:n-1}}(x_n \mid y_{1:n-1})
+    &= \int f_{X_n,\, X_{n-1} \mid Y_{1:n-1}}(x_n, x_{n-1} \mid y_{1:n-1})\, dx_{n-1} \\
+    &= \int f_{X_n \mid X_{n-1},\, Y_{1:n-1}}(x_n \mid x_{n-1}, y_{1:n-1})\,
+       f_{X_{n-1} \mid Y_{1:n-1}}(x_{n-1} \mid y_{1:n-1})\, dx_{n-1}
+\end{align*}
+Since $(X_n)$ is Markov and $Y_k$ depends only on $X_k$, we have
+$X_n \perp Y_{1:n-1} \mid X_{n-1}$, 
+\[
+    f_{X_n \mid X_{n-1},\, Y_{1:n-1}}(x_n \mid x_{n-1}, y_{1:n-1})
+    = f_{X_n \mid X_{n-1}}(x_n \mid x_{n-1}).
+\]
+Thus we derive the prediction formula
+\[
+    f_{X_n \mid Y_{1:n-1}}(x_n \mid y_{1:n-1})
+    = \int f_{X_{n-1} \mid Y_{1:n-1}}(x_{n-1} \mid y_{1:n-1})\,
+      f_{X_n \mid X_{n-1}}(x_n \mid x_{n-1})\, dx_{n-1} \qed
+\]
+
+\section*{5.3}
+From the definition of conditional density and the product rule $f_{X,Y\mid Z} = f_{Y \mid X, Z}\, f_{X \mid Z}$, we can write
+\begin{align*}
+    f_{X_n \mid Y_{1:n}}(x_n \mid y_{1:n})
+    &= \frac{f_{X_n,\, Y_n \mid Y_{1:n-1}}(x_n, y_n \mid y_{1:n-1})}
+            {f_{Y_n \mid Y_{1:n-1}}(y_n \mid y_{1:n-1})} \\ 
+    &= \frac{f_{Y_n \mid X_n,\, Y_{1:n-1}}(y_n \mid x_n, y_{1:n-1})\,
+             f_{X_n \mid Y_{1:n-1}}(x_n \mid y_{1:n-1})}
+            {f_{Y_n \mid Y_{1:n-1}}(y_n \mid y_{1:n-1})}
+\end{align*}
+In a POMP model the measurement $Y_n$ depends on the latent state only through $X_n$,
+so $Y_n \perp Y_{1:n-1} \mid X_n$. Therefore:
+\[
+    f_{X_n \mid Y_{1:n}}(x_n \mid y_{1:n})
+    = \frac{f_{X_n \mid Y_{1:n-1}}(x_n \mid y_{1:n-1})\,
+            f_{Y_n \mid X_n}(y_n \mid x_n)}
+           {f_{Y_n \mid Y_{1:n-1}}(y_n \mid y_{1:n-1})} \qed
+\]
+This is the filtering formula 
+\\
+To compute the conditional likelihood formula, we apply the marginalization identity
+$f_{X \mid Y} = \int f_{X, Z \mid Y}\, dz$ with $X = Y_n$, $Z = X_n$, $Y = Y_{1:n-1}$:
+\begin{align*}
+    f_{Y_n \mid Y_{1:n-1}}(y_n \mid y_{1:n-1})
+    &= \int f_{Y_n,\, X_n \mid Y_{1:n-1}}(y_n, x_n \mid y_{1:n-1})\, dx_n \\ 
+    &= \int f_{Y_n \mid X_n,\, Y_{1:n-1}}(y_n \mid x_n, y_{1:n-1})\,
+           f_{X_n \mid Y_{1:n-1}}(x_n \mid y_{1:n-1})\, dx_n \\
+    &= \int f_{X_n \mid Y_{1:n-1}}(x_n \mid y_{1:n-1})\,
+           f_{Y_n \mid X_n}(y_n \mid x_n)\, dx_n \qed
+\end{align*}
+\\
+The last equation is implied from the POMP measurement model. 
+
+\section*{5.4}
+Write $Y_{n:N} = (Y_n, Y_{n+1:N})$ and apply the product rule
+$f_{X,Y\mid Z} = f_{X\mid Z}\,f_{Y\mid X,Z}$, we have
+\begin{align*}
+    f_{Y_{n:N}\mid X_n}(y_{n:N}\mid x_n)
+    &= f_{Y_n \mid X_n}(y_n \mid x_n)\,
+       f_{Y_{n+1:N}\mid X_n,\,Y_n}(y_{n+1:N}\mid x_n, y_n)
+\end{align*}
+Under the measurement model assumption, 
+\[
+    f_{Y_{n+1:N}\mid X_n,\,Y_n}(y_{n+1:N}\mid x_n, y_n)
+    = f_{Y_{n+1:N}\mid X_n}(y_{n+1:N}\mid x_n),
+\]
+so
+\[
+    f_{Y_{n:N}\mid X_n}(y_{n:N}\mid x_n)
+    = f_{Y_n\mid X_n}(y_n\mid x_n)\,
+      f_{Y_{n+1:N}\mid X_n}(y_{n+1:N}\mid x_n) \qed
+\]
+\\
+Let $Z =X_{n+1}$ and apply $f_{X\mid Y} = \int f_{X,Z\mid Y}\,dz$:
+\begin{align*}
+    f_{Y_{n+1:N}\mid X_n}(y_{n+1:N}\mid x_n)
+    &= \int f_{Y_{n+1:N},\,X_{n+1}\mid X_n}(y_{n+1:N}, x_{n+1}\mid x_n)\,dx_{n+1} \\
+    &= \int f_{Y_{n+1:N}\mid X_{n+1},\,X_n}(y_{n+1:N}\mid x_{n+1}, x_n)\,
+           f_{X_{n+1}\mid X_n}(x_{n+1}\mid x_n)\,dx_{n+1}
+\end{align*}
+By the Markov property, $Y_{n+1:N} \perp X_n \mid X_{n+1}$, so
+\[
+    f_{Y_{n+1:N}\mid X_{n+1},\,X_n}(y_{n+1:N}\mid x_{n+1}, x_n)
+    = f_{Y_{n+1:N}\mid X_{n+1}}(y_{n+1:N}\mid x_{n+1})
+\]
+Hence the final derivation is
+\[
+    f_{Y_{n+1:N}\mid X_n}(y_{n+1:N}\mid x_n)
+    = \int f_{Y_{n+1:N}\mid X_{n+1}}(y_{n+1:N}\mid x_{n+1})\,
+           f_{X_{n+1}\mid X_n}(x_{n+1}\mid x_n)\,dx_{n+1} \qed
+\]
+
+\section*{5.5}
+Split $Y_{1:N} = (Y_{1:n-1}, Y_{n:N})$ and apply Bayes' rule, we have
+\begin{align*}
+    f_{X_n \mid Y_{1:N}}(x_n \mid y_{1:N})
+    &= f_{X_n \mid Y_{1:n-1},\, Y_{n:N}}(x_n \mid y_{1:n-1}, y_{n:N}) \\[4pt]
+    &= \frac{f_{Y_{n:N} \mid X_n,\, Y_{1:n-1}}(y_{n:N} \mid x_n, y_{1:n-1})\,
+             f_{X_n \mid Y_{1:n-1}}(x_n \mid y_{1:n-1})}
+            {f_{Y_{n:N} \mid Y_{1:n-1}}(y_{n:N} \mid y_{1:n-1})}
+\end{align*}
+In a POMP model the current state $X_n$ renders future observations $Y_{n:N}$
+independent of the past $Y_{1:n-1}$. Therefore:
+\[
+    f_{Y_{n:N} \mid X_n,\, Y_{1:n-1}}(y_{n:N} \mid x_n, y_{1:n-1})
+    = f_{Y_{n:N} \mid X_n}(y_{n:N} \mid x_n)
+\]
+Substituting gives the final smoothing formula 
+\[
+    f_{X_n \mid Y_{1:N}}(x_n \mid y_{1:N})
+    = \frac{f_{X_n \mid Y_{1:n-1}}(x_n \mid y_{1:n-1})\,
+            f_{Y_{n:N} \mid X_n}(y_{n:N} \mid x_n)}
+           {f_{Y_{n:N} \mid Y_{1:n-1}}(y_{n:N} \mid y_{1:n-1})} \qed
+\]
+
+
+\end{document}
